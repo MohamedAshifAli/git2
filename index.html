@@ -1,684 +1,287 @@
+import os
+
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.signal import butter, filtfilt
+import scipy.io
 from glob import glob
-from random import randint
 
+# Function for Butterworth bandpass filter
+directory = glob("trainingnew\\training\\*.mat")
+# from scipy.signal import find_peaks
 
-import cv2
-import keras
-
-import nibabel as nib
-import pandas as pd
-from keras import backend as K, Input
-# from  mealpy1.music_based.SSE import dB
-from imblearn.over_sampling import SMOTE
-from keras import Model
-from keras.applications import ResNet101
-from keras.initializers.initializers_v1 import RandomNormal
-from keras.optimizers import Adam
-from matplotlib import pyplot as plt, gridspec
-import math
-
-from numpy import zeros, ones, load
-from scipy.stats import skew, kurtosis, entropy
-from skimage.util import montage
-from skimage.transform import rotate
-# import nilearn as nl
-from sklearn.linear_model import SGDClassifier
-from keras.utils import plot_model
-from sklearn.model_selection import train_test_split, StratifiedKFold
-# from mealpy1.swarm_based.GWO import  BaseGWO as GWO
-# from mealpy1.swarm_based.BES import BaseBES as BEO
-# from mealpy1.Prop import BaseProp as Prop
-from termcolor import colored
-import tensorflow as tf
-# import lightgbm as lgb
-from sklearn.metrics import  accuracy_score
 import numpy as np
-from keras.models import Sequential
-from keras.layers import Dense, Conv2D, MaxPool2D, Flatten, Dropout, BatchNormalization, Activation, Reshape, \
-    GlobalAveragePooling2D, GlobalMaxPooling2D, Add, multiply, Lambda, Conv2DTranspose
+import matplotlib.pyplot as plt
+from scipy.signal import butter, filtfilt
+import scipy.io
+from glob import glob
 
-#
-# TRAIN_DATASET_PATH = 'Datasets/MICCAI_BraTS_2019_Data_Training/Datasets/HGG/'
-# #VALIDATION_DATASET_PATH = '../input/d/debobratachakraborty/brats2019-dataset/MICCAI_BraTS_2019_Data_Training/'
-#
-# test_image_flair=nib.load(TRAIN_DATASET_PATH + 'BraTS19_2013_10_1/BraTS19_2013_10_1_flair.nii').get_fdata()
-# test_image_t1=nib.load(TRAIN_DATASET_PATH + 'BraTS19_2013_10_1/BraTS19_2013_10_1_t1.nii').get_fdata()
-#
-# test_image_t1ce=nib.load(TRAIN_DATASET_PATH + 'BraTS19_2013_10_1/BraTS19_2013_10_1_t1ce.nii').get_fdata()
-# test_image_t2=nib.load(TRAIN_DATASET_PATH + 'BraTS19_2013_10_1/BraTS19_2013_10_1_t2.nii').get_fdata()
-# test_mask=nib.load(TRAIN_DATASET_PATH + 'BraTS19_2013_10_1/BraTS19_2013_10_1_seg.nii').get_fdata()
-
-DATASET_PATH ="Datasets/MICCAI_BraTS_2019_Data_Training/Datasets/HGG/"
+# Function for Butterworth bandpass filter
 
 
-def TestImageOutput():
+# Derivative filter
+def derivative_filter(data):
+    derivative_pass = np.diff(data, prepend=data[0])
+    return derivative_pass
 
-    test_image1_flair = nib.load(DATASET_PATH + 'BraTS19_2013_2_1/BraTS19_2013_2_1_flair.nii').get_fdata()
-    test_image1_t1 = nib.load(DATASET_PATH + 'BraTS19_2013_2_1/BraTS19_2013_2_1_t1.nii').get_fdata()
-    test_image1_t1ce = nib.load(DATASET_PATH + 'BraTS19_2013_2_1/BraTS19_2013_2_1_seg.nii').get_fdata()
-    test_image1_t2 = nib.load(DATASET_PATH + 'BraTS19_2013_2_1/BraTS19_2013_2_1_t1ce.nii').get_fdata()
-    test_mask1 = nib.load(DATASET_PATH + 'BraTS19_2013_2_1/BraTS19_2013_2_1_t2.nii').get_fdata()
-    fig, ((ax1, ax2, ax3, ax4, ax5), (ax6, ax7, ax8, ax9, ax10), (ax11, ax12, ax13, ax14, ax15)) = plt.subplots(3, 5, figsize=(20, 10))
-    slice_w = 25
-    ax1.imshow(test_image1_flair[:, :, test_image1_flair.shape[0] // 2 - slice_w], cmap='gray')
-    ax1.axis("off")
-    ax1.set_title('Image flair')
-    ax2.imshow(test_image1_t1[:, :, test_image1_t1.shape[0] // 2 - slice_w], cmap='gray')
-    ax2.axis("off")
-    ax2.set_title('Image t1')
-    ax3.imshow(test_image1_t1ce[:, :, test_image1_t1ce.shape[0] // 2 - slice_w], cmap='gray')
-    ax3.axis("off")
-    ax3.set_title('Image t1ce')
-    ax4.imshow(test_image1_t2[:, :, test_image1_t2.shape[0] // 2 - slice_w], cmap='gray')
-    ax4.axis("off")
-    ax4.set_title('Image t2')
-    ax5.imshow(test_mask1[:, :, test_mask1.shape[0] // 2 - slice_w])
-    ax5.axis("off")
-    ax5.set_title('Mask')
-    plt.savefig("ImageResults\\ActualImages.png", dpi=800)
-    plt.show()
-    plt.clf()
-    # Skip 50:-50 slices since there is not much to see
-    fig, ax1 = plt.subplots(1, 1, figsize=(15, 15))
-    ax1.imshow(rotate(montage(test_image1_t1[50:-50, :, :]), 90, resize=True), cmap='gray')
-    plt.axis("off")
-    plt.savefig("ImageResults\\FullSlices.png", dpi=800)
-    plt.show()
-    plt.clf()
-    # Skip 50:-50 slices since there is not much to see
-    fig, ax1 = plt.subplots(1, 1, figsize=(15, 15))
-    ax1.imshow(rotate(montage(test_mask1[60:-60, :, :]), 90, resize=True), cmap='gray')
-    plt.axis("off")
-    plt.savefig("ImageResults\\FullSlices_segmented.png", dpi=800)
-    plt.show()
+# Squaring function
+def squaring(data):
+    square_pass = data ** 2
+    return square_pass
 
-# TestImageOutput()
+# Moving average filter
+def moving_window_integration(data, sample_rate, window_size=None):
+    if window_size is None:
+        assert sample_rate is not None, "if window size is None, sampling rate should be given"
+        window_size = int(0.08 * int(sample_rate))
+    integrated_signal = np.zeros(len(data))
+    cumulative_sum = np.cumsum(data)
+    integrated_signal[window_size:] = (cumulative_sum[window_size:] - cumulative_sum[:-window_size]) / window_size
+    integrated_signal[:window_size] = cumulative_sum[:window_size] / np.arange(1, window_size + 1)
+    return integrated_signal
+from scipy.signal import butter, filtfilt
+
+# Define Butterworth bandpass filter
+def butter_bandpass(lowcut, highcut, fs, order=5):
+    nyq = 0.5 * fs
+    low = lowcut / nyq
+    high = highcut / nyq
+    b, a = butter(order, [low, high], btype='band')
+    return b, a
+
+def butter_bandpass_filter(data, lowcut, highcut, fs, order=5):
+    b, a = butter_bandpass(lowcut, highcut, fs, order=order)
+    y = filtfilt(b, a, data)
+    return y
+
+def differentiate(signal):
+    return np.diff(signal)
+
+def find_pqrst_waves(directory):
+    fs = 1000
+
+def calculate_threshold(signal, threshold_factor=0.5):
+        x = np.mean(signal) * threshold_factor
+        return x
+
+# def find_peaks(diff_signal, threshold):
+#     peaks, _ = scipy.signal.find_peaks(diff_signal[0], height=threshold)
+#     return peaks
+
+def find_peaks(diff_signal, threshold):
+    all_peaks = []
+    for i in range(diff_signal.shape[0]):
+        peaks, _ = scipy.signal.find_peaks(diff_signal[i], height=threshold)
+        all_peaks.append(peaks)
+    return all_peaks
+
+def mark_pqrst(filtered_signal, peaks):
+    p_waves = []
+    q_waves = []
+    r_waves = []
+    s_waves = []
+    t_waves = []
+
+    for row, peak_list in enumerate(peaks):
+        row_p_waves = []
+        row_q_waves = []
+        row_r_waves = []
+        row_s_waves = []
+        row_t_waves = []
+
+        if len(peak_list) == 0:
+            # Append empty lists if no peaks are detected in this row
+            p_waves.append(row_p_waves)
+            q_waves.append(row_q_waves)
+            r_waves.append(row_r_waves)
+            s_waves.append(row_s_waves)
+            t_waves.append(row_t_waves)
+            continue  # Move to the next row
+
+        r_wave = peak_list[0]  # Initialize with the first peak
+
+        for i in range(1, len(peak_list)):
+            if filtered_signal[row][peak_list[i]] > filtered_signal[row][r_wave]:
+                r_wave = peak_list[i]
+
+        row_r_waves.append(r_wave)
+
+        q_candidates = [p for p in peak_list if p < r_wave and filtered_signal[row][p] < 0]
+        if q_candidates:
+            row_q_waves.append(q_candidates[-1])
+
+        s_candidates = [p for p in peak_list if p > r_wave and filtered_signal[row][p] < 0]
+        if s_candidates:
+            row_s_waves.append(s_candidates[0])
+
+        if row_q_waves:
+            p_candidates = [p for p in peak_list if p < row_q_waves[-1]]
+            if p_candidates:
+                row_p_waves.append(p_candidates[-1])
+
+        if row_s_waves:
+            t_candidates = [p for p in peak_list if p > row_s_waves[-1]]
+            if t_candidates:
+                row_t_waves.append(t_candidates[0])
+
+        # Append detected waves for this row
+        p_waves.append(row_p_waves)
+        q_waves.append(row_q_waves)
+        r_waves.append(row_r_waves)
+        s_waves.append(row_s_waves)
+        t_waves.append(row_t_waves)
+
+    return p_waves, q_waves, r_waves, s_waves, t_waves
 
 
 
 
-def preprocessg():
-        ## Read the Brats_2019 Dataset
-    dataset = glob("Datasets/MICCAI_BraTS_2019_Data_Training/Datasets/HGG"+"/**")
+# Iterate over all files in the directory
+def PPG_Signals():
+    count = 0
+    fs = 1000  # Sample rate (Hz)
+    # High cut-off frequency (Hz)
+    order = 4
+    directory = glob("training/training/*.mat")
+    for filename in range(len(directory)):
+        # Load the .mat file
+        threshold = 0.5  # Adjust the threshold as needed
+        window_size = 100
+        mat_data = scipy.io.loadmat(directory[filename])
+        s = mat_data['val']
+        lowcut = np.random.uniform(0.1, 1)  # Random lower cutoff frequency between 0.1 and 1 Hz
+        highcut = np.random.uniform(2, 10)
+        filtered_signal1 = butter_bandpass_filter(s, 0.5, 300.0, fs, order)
+        filtered_signal = filtered_signal1[:, :1000]
+        # filtered_signal2 = filtered_signal2.flatten()
+        diff_signal = differentiate(filtered_signal)
 
-    features = []
-    labels = []
-    Maskimages = []
-    for i in range(10):
-        ### Read all files inside the folder
-        all_files = glob(dataset[i] + "/*.nii")
+        # Calculate threshold
+        threshold = np.mean(diff_signal) * 0.5
 
-        ### from the list select flair and seg files
-        flair_file = all_files[0]
-        seg_file = all_files[1]
+        # Find peaks
+        peaks = find_peaks(diff_signal, threshold)
 
-        ### Read nii file using the builtin function nibabel
-        image = nib.load(flair_file).get_fdata()
-        ### Read Ground Truth image
-        gt=nib.load(seg_file).get_fdata()
-        #### There may be 155 slices within we will take the ranges of 50 to 110
-        for ii in range(50,110):
-            #### image slices
-            img = image[:, :, ii]
-            ###  Mask slices
-            msk = gt[:,:,ii]
-            Maskimages.append(msk)
-            ### Get the label
-            values = np.unique(msk)
-            if values.any() >0:
-                lab = max(values)
-                if lab == 4:
-                    lab = 3
-                labels.append(lab)
-                # Append segmentation mask instead of resized image
-                features.append(msk)
-                # # DEFINE seg-areas
-                # SEGMENT_CLASSES = {
-                #     0 : 'NOT tumor',
-                #     1 : 'NECROTIC/CORE', # or NON-ENHANCING tumor CORE
-                #     2 : 'EDEMA',
-                #     3 : 'ENHANCING' # original 4 -> converted into 3 later
-                # }
+        # Mark PQRST waves
+        p_waves, q_waves, r_waves, s_waves, t_waves = mark_pqrst(filtered_signal, peaks)
 
+        # Plot the filtered signal with PQRST labels
+        # plot_signal_with_pqrst(filtered_signal2, p_waves, q_waves, r_waves, s_waves, t_waves)
+
+        plt.figure(figsize=(12, 6))
+
+        for row in range(filtered_signal.shape[0]):
+            if row == 0:
+                plt.plot(filtered_signal[row], label='Filtered Signal')
             else:
-                labels.append(0) # Non Tumor Labels
-                features.append(img)
-
-    np.save ("Features and labels/Maskimages.npy",Maskimages)
-    np.save("Features and labels/features.npy", features)
-    np.save("Features and labels/labels.npy", labels)
-
-    return features, labels, Maskimages
-
-
-# preprocessg()
-
-
-def define_discriminator(image_shape):
-    # weight initialization
-    init = RandomNormal(stddev=0.02)
-    # source image input
-    in_src_image = Input(shape=image_shape)
-    # target image input
-    in_target_image = Input(shape=image_shape)
-    # concatenate images channel-wise
-    merged = Concatenate()([in_src_image, in_target_image])
-    # C64
-    d = Conv2D(64, (4, 4), strides=(2, 2), padding='same', kernel_initializer=init)(merged)
-    d = LeakyReLU(alpha=0.2)(d)
-    # C128
-    d = Conv2D(128, (4, 4), strides=(2, 2), padding='same', kernel_initializer=init)(d)
-    d = BatchNormalization()(d)
-    d = LeakyReLU(alpha=0.2)(d)
-    # C256
-    d = Conv2D(256, (4, 4), strides=(2, 2), padding='same', kernel_initializer=init)(d)
-    d = BatchNormalization()(d)
-    d = LeakyReLU(alpha=0.2)(d)
-    # C512
-    d = Conv2D(512, (4, 4), strides=(2, 2), padding='same', kernel_initializer=init)(d)
-    d = BatchNormalization()(d)
-    d = LeakyReLU(alpha=0.2)(d)
-    # second last output layer
-    d = Conv2D(512, (4, 4), padding='same', kernel_initializer=init)(d)
-    d = BatchNormalization()(d)
-    d = LeakyReLU(alpha=0.2)(d)
-    # patch output
-    d = Conv2D(1, (4, 4), padding='same', kernel_initializer=init)(d)
-    patch_out = Activation('sigmoid')(d)
-    # define model
-    model = Model([in_src_image, in_target_image], patch_out)
-    # compile model
-    opt = Adam(lr=0.0002, beta_1=0.5)
-    model.compile(loss='binary_crossentropy', optimizer=opt, loss_weights=[0.5])
-    return model
-
-
-# define an encoder block
-def define_encoder_block(layer_in, n_filters, batchnorm=True):
-    # weight initialization
-    init = RandomNormal(stddev=0.02)
-    # add downsampling layer
-    g = Conv2D(n_filters, (4, 4), strides=(2, 2), padding='same', kernel_initializer=init)(layer_in)
-    # conditionally add batch normalization
-    if batchnorm:
-        g = BatchNormalization()(g, training=True)
-    # leaky relu activation
-    g = LeakyReLU(alpha=0.2)(g)
-    return g
-
-# from keras.initializers import RandomNormal
-
-from keras.layers import Input
-from keras.models import Model
-from keras.layers import Conv2D, Conv2DTranspose, Activation, LeakyReLU,BatchNormalization
-# from keras.initializers import RandomNormal
-from keras.layers import Conv2DTranspose, BatchNormalization, Dropout, Concatenate, Activation
-
-# define a decoder block
-def decoder_block(layer_in, skip_in, n_filters, dropout=True):
-    # weight initialization
-    init = RandomNormal(stddev=0.02)
-    # add upsampling layer
-    g = Conv2DTranspose(n_filters, (4, 4), strides=(2, 2), padding='same', kernel_initializer=init)(layer_in)
-    # add batch normalization
-    g = BatchNormalization()(g, training=True)
-    # conditionally add dropout
-    if dropout:
-        g = Dropout(0.5)(g, training=True)
-    # merge with skip connection
-    g = Concatenate()([g, skip_in])
-    # relu activation
-    g = Activation('relu')(g)
-    return g
-
-
-# define the standalone generator model
-def define_generator(image_shape=(256, 256, 3)):
-    # weight initialization
-    init = RandomNormal(stddev=0.02)
-    # image input
-    in_image = Input(shape=image_shape)
-    # encoder model
-    e1 = define_encoder_block(in_image, 64, batchnorm=False)
-    e2 = define_encoder_block(e1, 128)
-    e3 = define_encoder_block(e2, 256)
-    e4 = define_encoder_block(e3, 512)
-    e5 = define_encoder_block(e4, 512)
-    e6 = define_encoder_block(e5, 512)
-    e7 = define_encoder_block(e6, 512)
-    # bottleneck, no batch norm and relu
-    b = Conv2D(512, (4, 4), strides=(2, 2), padding='same', kernel_initializer=init)(e7)
-    b = Activation('relu')(b)
-    # decoder model
-    d1 = decoder_block(b, e7, 512)
-    d2 = decoder_block(d1, e6, 512)
-    d3 = decoder_block(d2, e5, 512)
-    d4 = decoder_block(d3, e4, 512, dropout=False)
-    d5 = decoder_block(d4, e3, 256, dropout=False)
-    d6 = decoder_block(d5, e2, 128, dropout=False)
-    d7 = decoder_block(d6, e1, 64, dropout=False)
-    # output
-    g = Conv2DTranspose(3, (4, 4), strides=(2, 2), padding='same', kernel_initializer=init)(d7)
-    out_image = Activation('tanh')(g)
-    # define model
-    model = Model(in_image, out_image)
-    return model
-
-
-# define the combined generator and discriminator model, for updating the generator
-def define_gan(g_model, d_model, image_shape):
-    # make weights in the discriminator not trainable
-    for layer in d_model.layers:
-        if not isinstance(layer, BatchNormalization):
-            layer.trainable = False
-    # define the source image
-    in_src = Input(shape=image_shape)
-    # connect the source image to the generator input
-    gen_out = g_model(in_src)
-    # connect the source input and generator output to the discriminator input
-    dis_out = d_model([in_src, gen_out])
-    # src image as input, generated image and classification output
-    model = Model(in_src, [dis_out, gen_out])
-    # compile model
-    opt = Adam(lr=0.0002, beta_1=0.5)
-    model.compile(loss=['binary_crossentropy', 'mae'], optimizer=opt, loss_weights=[1, 100])
-    return model
-
-# load and prepare training images
-def load_real_samples(filename):
-    # load compressed arrays
-    data = load(filename)
-    # unpack arrays
-    X1, X2 = data['arr_0'], data['arr_1']
-    # scale from [0,255] to [-1,1]
-    X1 = (X1 - 127.5) / 127.5
-    X2 = (X2 - 127.5) / 127.5
-    return [X1, X2]
-
-# select a batch of random samples, returns images and target
-def generate_real_samples(trainA, trainB, n_samples, patch_shape):
-    # choose random instances
-
-    ix = np.random.randint(0, trainA.shape[0], n_samples)
-
-    # retrieve selected images
-    X1, X2 = trainA[ix], trainB[ix]
-    # generate 'real' class labels (1)
-    y = ones((n_samples, patch_shape, patch_shape, 1))
-    return [X1, X2], y
-
-# generate a batch of images, returns images and targets
-def generate_fake_samples(g_model, samples, patch_shape):
-    # generate fake instance
-    X = g_model.predict(samples)
-    # create 'fake' class labels (0)
-    y = zeros((len(X), patch_shape, patch_shape, 1))
-    return X, y
-import cv2
-import numpy as np
-import cv2
-import numpy as np
-
-
-def GAN_Segmentation(image, mask, n_epochs=3, run=True):
-    # Resize image and mask
-    image_resized = cv2.resize(image, (256, 256))
-    mask_resized = cv2.resize(mask, (256, 256))
-    mask_resized[mask_resized > 0] = 255  # Set mask values to 255
-    mask_resized = cv2.cvtColor(np.uint8(mask_resized), cv2.COLOR_GRAY2BGR)
-    image_resized = cv2.cvtColor(np.uint8(image_resized), cv2.COLOR_GRAY2BGR)
-    image_expanded = np.expand_dims(image_resized, axis=0)  # Add batch dimension to image
-    mask_expanded = np.expand_dims(mask_resized, axis=0)  # Add batch dimension to mask
-
-    # Scale image and mask to [-1, 1]
-    image_scaled = (image_expanded - 127.5) / 127.5
-    mask_scaled = (mask_expanded - 127.5) / 127.5
-
-    all_results = []  # Initialize list to store segmented images
-
-    if run:
-        # Define and train GAN model
-        d_model = define_discriminator(image_scaled.shape[1:])
-        g_model = define_generator(image_scaled.shape[1:])
-        gan_model = define_gan(g_model, d_model, image_scaled.shape[1:])
-
-        n_patch = d_model.output_shape[1]
-        n_steps = 3
-
-        for epoch in range(n_epochs):
-            print("Epoch:", epoch)  # Print current epoch number
-
-            for step in range(n_steps):
-                [X_realA, X_realB], y_real = generate_real_samples(image_scaled, mask_scaled, 1, n_patch)
-                X_fakeB, y_fake = generate_fake_samples(g_model, X_realA, n_patch)
-                d_loss1 = d_model.train_on_batch([X_realA, X_realB], y_real)
-                d_loss2 = d_model.train_on_batch([X_realA, X_fakeB], y_fake)
-                g_loss, _, _ = gan_model.train_on_batch(X_realA, [y_real, X_realB])
-
-                if (step + 1) % (len(image_scaled) * 10) == 0:
-                    [X_realA1, X_realB1], _ = generate_real_samples(image_scaled, mask_scaled, 1, 1)
-                    X_fakeB1, _ = generate_fake_samples(g_model, X_realA1, 1)
-                    X_realA1 = (X_realA1 + 1) / 2.0
-                    X_realB1 = (X_realB1 + 1) / 2.0
-                    X_fakeB1 = (X_fakeB1 + 1) / 2.0
-
-                    result = X_fakeB1[0, :, :, :]
-                    result[result > np.mean(result)] = 1
-                    result[result < np.mean(result)] = 0
-                    all_results.append(result.copy())
-                    # Display the segmented image
-                    cv2.imshow("Segmented Image", result)
-                    cv2.waitKey(0)
-                    cv2.destroyAllWindows()
-                    # Append segmented image to list
-                    # all_results.append(result.copy())
-
-            # Break out of the outer loop if the desired number of epochs is reached
-            if epoch + 1 == n_epochs:
-                break
-
-    else:
-        if np.unique(mask).any() > 0:
-            result = mask
-        else:
-            result = image_expanded[0, :, :, :]
-
-        # all_results.append(result.copy())  # Append segmented image to list
-
-    # Convert the list of segmented images to a NumPy array
-    # all_results = np.asarray(all_results)
-
-    return all_results
-
-
-import numpy as np
-import cv2
-
-import numpy as np
-import numpy as np
-import cv2
-
-def Segmentation():
-    features = np.load("Features and labels/features.npy")[:1]
-    masks = np.load("Features and labels/Maskimages.npy")[:1]
-    n_epochs = 100
-    run = True
-    # Initialize list to store segmented images
-    all_outputs = []
-
-    # Loop through images
-    for i in range(len(features)):
-        # Initialize list to store segmented images for the current image
-        segmented_images = []
-
-        # Assuming GAN_Segmentation function returns output as a list of segmented images
-        output = GAN_Segmentation(features[i], masks[i], n_epochs, run)
-
-        # Save segmented images for the current image
-        for j, segmented_image in enumerate(output):
-            np.save(f"segmented_image_{i}_epoch_{j}.npy", segmented_image)
-            segmented_images.append(segmented_image)
-
-        # Append segmented images to the list of all outputs
-        all_outputs.append(segmented_images)
-
-    # Convert all_outputs to numpy array
-    all_outputs = np.asarray(all_outputs)
-
-    # Save the outputs as "segmentation.npy" file
-    np.save("segmentation.npy", all_outputs)
-
-    return all_outputs
-
-Segmentation()
-# seg = np.load("segmentation.npy")
-# plt.show(seg[0])
-# Segmentation()
-
-
-
-# Example usage
-# Load images and masks
-  # List of masks
-
-Segmentation(feat, masks)
-
-
-seg = np.load("segmentation.npy")
-print()
-
-from tensorflow.keras.applications import EfficientNetB7
-from tensorflow.keras.models import Model
-import cv2
-import numpy as np
-
-
-def EfficientNetB7_FlowMap(img):
-    # Load the EfficientNetB7 model with pre-trained weights
-    model = EfficientNetB7(include_top=False, weights='imagenet')
-
-    # Extract features from the second last layer of EfficientNetB7
-    features_model = Model(inputs=model.inputs, outputs=model.layers[-2].output)
-
-    # Resize the input image to the required size for EfficientNetB7
-    image = cv2.resize(img, (600, 600))
-
-    # Preprocess the image according to EfficientNetB7 requirements
-    image = EfficientNetB7.preprocess_input(image)
-
-    # Reshape the image for model prediction
-    image = image.reshape(1, image.shape[0], image.shape[1], image.shape[2])
-
-    # Extract features using EfficientNetB7 model
-    features = features_model.predict(image)
-
-    return features
-
-
-
-
-
-
-
-
-
-
-
-# Example usage:
-img = cv2.imread('your_image.jpg')  # Load your input image here
-features = EfficientNetB7_FlowMap(img)
-print(features.shape)
-# def Hybrid_Attention_Module_Segmentation(x):
-#     # Get Weights from previous layers
-#     all_x = x.node.layer.trainable_weights
-#     # From all weights select zeroth layer weights
-#     sel_x = all_x[0]
-#     w = np.array(sel_x)
-#     x = tf.convert_to_tensor(x)
-#     # feed selected weights into Triplet attention Module
-#     weights = HybridAttention(x).forward()
-#     # Reshape according to old weight
-#     weights = weights.reshape(w.shape[0], w.shape[1],w.shape[2],w.shape[3])
-#     # Convert it into tensor
-#     weights = tf.convert_to_tensor(weights)
-#     ##replace old weight by Triplet module generated weights
-#     all_x[0] = weights
-#     # updated all weights in x
-#     x.node.layer.trainable_weights_ = all_x
-#     return x
-#
-# class HybridAttention:
-#     def __init__(self, x,use_skip_connection=False):
-#         self.x=x
-#         self.ca = ZeroChannelAttention()
-#         self.sa = ZeroSpatialAttention()
-#         self.use_skip_connection = use_skip_connection
-#
-#     def forward(self):
-#         out = self.x
-#         out = out + out * self.sa.forward(out) if self.use_skip_connection else out * self.sa.forward(out)
-#         out =out[:self.x.shape[0], :self.x.shape[1], :self.x.shape[2], :self.x.shape[3]]
-#         ## Hybrid
-#         out=np.array(out)
-#         out=position_attention(out)
-#         return out
-# class ZeroChannelAttention:
-#     def __init__(self):
-#         self.avg_pool =  GlobalAveragePooling2D()
-#         self.max_pool = GlobalMaxPooling2D()
-#
-#         self.sigmoid =Activation('sigmoid')
-#
-#     def forward(self, x):
-#         self.avg_pool=self.avg_pool(x)
-#         self.max_pool=self.max_pool(x)
-#         self.x=Add()([self.avg_pool, self.max_pool])
-#         self.x=self.sigmoid(self.x)
-#         return self.x
-#
-# class ZeroSpatialAttention:
-#     def __init__(self):
-#         self.sigmoid =Activation('sigmoid')
-#
-#     def forward(self, X):
-#         self.avg_out =  Lambda(lambda x: K.mean(x, axis=3, keepdims=True))(X)
-#         self.max_out= Lambda(lambda x: K.max(x, axis=3, keepdims=True))(X)
-#         self.x = Add()([self.avg_out, self.max_out])
-#         self.x = self.sigmoid(self.x)
-#         return self.x
-#
-# class HybridAttention:
-#     def __init__(self, x,use_skip_connection=False):
-#         self.x=x
-#         self.ca = ZeroChannelAttention()
-#         self.sa = ZeroSpatialAttention()
-#         self.use_skip_connection = use_skip_connection
-#
-#     def forward(self):
-#         out = self.x
-#         out = out + out * self.sa.forward(out) if self.use_skip_connection else out * self.sa.forward(out)
-#         out =out[:self.x.shape[0], :self.x.shape[1], :self.x.shape[2], :self.x.shape[3]]
-#         ## Hybrid
-#         out=np.array(out)
-#         out=position_attention(out)
-#         return out
-#
-#
-#
-# def position_attention(input_feature, ratio=8):
-#     """
-#         Position attention mechanism.
-#
-#         Args:
-#             input_feature: Input feature.
-#             ratio: Ratio for channel reduction.
-#
-#         Returns:
-#             pam_feature: Output feature.
-#         """
-#     # channel_axis = 1 if K.image_data_format() == "channels_first" else -1
-#     channel_axis = -1
-#     channel = input_feature.shape[channel_axis]
-#
-#     shared_layer_one = Dense(channel // ratio,
-#                              activation='relu',
-#                              kernel_initializer='he_normal',
-#                              use_bias=True,
-#                              bias_initializer='zeros')
-#     shared_layer_two = Dense(channel,
-#                              kernel_initializer='he_normal',
-#                              use_bias=True,
-#                              bias_initializer='zeros')
-#
-#     avg_pool = GlobalAveragePooling2D()(input_feature)
-#     avg_pool = Reshape((1, 1, channel))(avg_pool)
-#     assert avg_pool.shape[1:] == (1, 1, channel)
-#     avg_pool = shared_layer_one(avg_pool)
-#     assert avg_pool.shape[1:] == (1, 1, channel // ratio)
-#     avg_pool = shared_layer_two(avg_pool)
-#     assert avg_pool.shape[1:] == (1, 1, channel)
-#
-#     max_pool = GlobalMaxPooling2D()(input_feature)
-#     max_pool = Reshape((1, 1, channel))(max_pool)
-#     assert max_pool.shape[1:] == (1, 1, channel)
-#     max_pool = shared_layer_one(max_pool)
-#     assert max_pool.shape[1:] == (1, 1, channel // ratio)
-#     max_pool = shared_layer_two(max_pool)
-#     assert max_pool.shape[1:] == (1, 1, channel)
-#
-#     max_pool = GlobalMaxPooling2D()(input_feature)
-#     max_pool = Reshape((1, 1, channel))(max_pool)
-#     assert max_pool.shape[1:] == (1, 1, channel)
-#     max_pool = shared_layer_one(max_pool)
-#     assert max_pool.shape[1:] == (1, 1, channel // ratio)
-#     max_pool = shared_layer_two(max_pool)
-#     assert max_pool.shape[1:] == (1, 1, channel)
-#
-#     pam_feature = Add()([avg_pool, max_pool])
-#     pam_feature = Activation('softmax')(pam_feature)
-#
-#     return multiply([input_feature, pam_feature])
-#
-# def Hybrid_Attention_Module(model):
-#     """
-#         Modify the weights of the model using hybrid attention mechanism.
-#
-#         Args:
-#             model: Input model.
-#
-#         Returns:
-#             model: Modified model.
-#         """
-#     #It will get weights from module
-#     weights = model.get_weights()
-#     weight = weights[0]
-#     tunedweight = Hybrid_Attention_Block(weight)
-#     weights[0]=tunedweight
-#     model.set_weights(weights)
-#     return model
-#
-#
-# def Hybrid_Attention_Block(w):
-#     """
-#         Hybrid attention block.
-#         Args:
-#             w: Input weights.
-#         Returns:
-#             newweight: Modified weights.
-#         """
-#     import tensorflow as tf
-#     x = tf.convert_to_tensor(w)
-#     feature = HybridAttention(x).forward()
-#     newweight = tf.reshape(feature, [w.shape[0], w.shape[1], w.shape[2],w.shape[3]])
-#     newweight = np.array(newweight)
-#     return newweight
-#
-# def Hybrid_Attention_Module(model):
-#     """
-#         Modify the weights of the model using hybrid attention mechanism.
-#
-#         Args:
-#             model: Input model.
-#
-#         Returns:
-#             model: Modified model.
-#         """
-#     #It will get weights from module
-#     weights = model.get_weights()
-#     weight = weights[0]
-#     tunedweight = Hybrid_Attention_Block(weight)
-#     weights[0]=tunedweight
-#     model.set_weights(weights)
-#     return model
-#
-# import tensorflow as tf
+                plt.plot(filtered_signal[row])
+
+            if p_waves[row]:
+                plt.plot(p_waves[row], filtered_signal[row][p_waves[row]], 'go',
+                         label='P Waves' if row == 0 else "")
+            if q_waves[row]:
+                plt.plot(q_waves[row], filtered_signal[row][q_waves[row]], 'bo',
+                         label='Q Waves' if row == 0 else "")
+            if r_waves[row]:
+                plt.plot(r_waves[row], filtered_signal[row][r_waves[row]], 'ro',
+                         label='R Waves' if row == 0 else "")
+            if s_waves[row]:
+                plt.plot(s_waves[row], filtered_signal[row][s_waves[row]], 'mo',
+                         label='S Waves' if row == 0 else "")
+            if t_waves[row]:
+                plt.plot(t_waves[row], filtered_signal[row][t_waves[row]], 'co',
+                         label='T Waves' if row == 0 else "")
+
+        plt.xlabel('Time (in Seconds')
+        plt.ylabel('Samples')
+        plt.legend()
+        output_dir = "PQRST Segmented"
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir)
+
+        # Save the plot to the directory
+        plt.savefig(os.path.join(output_dir, f"_{filename}PQRST_Waves_Segmented.png"))
+        # plt.show()
+        plt.close()
+
+
+    return
+
+PPG_Signals()
+
+
+# #Butrterworth
 # import numpy as np
-# import os
-#
 # import matplotlib.pyplot as plt
-# import matplotlib.gridspec as gridspec
+# from scipy import signal
 #
-# plt.rcParams['figure.figsize'] = (10.0, 8.0) # set default size of plots
-# plt.rcParams['image.interpolation'] = 'nearest'
-# plt.rcParams['image.cmap'] = 'gray'
+# fs = 1000  # Sampling frequency
+# # Generate the time vector properly
+# t = np.arange(1000) / fs
+# signala = np.sin(2*np.pi*100*t) # with frequency of 100
+# plt.plot(t, signala, label='a')
 #
+# signalb = np.sin(2*np.pi*20*t) # frequency 20
+# plt.plot(t, signalb, label='b')
+#
+# signalc = signala + signalb
+# plt.plot(t, signalc, label='c')
+#
+# fc = 30  # Cut-off frequency of the filter
+# w = fc / (fs / 2) # Normalize the frequency
+# b, a = signal.butter(5, w, 'low')
+# output = signal.filtfilt(b, a, signalc)
+# plt.plot(t, output, label='filtered')
+# plt.legend()
+# plt.show()
+
+
+# #Butterworth Bandpass filter
+#
+# import numpy as np
+# import matplotlib.pyplot as plt
+# from scipy.signal import butter, filtfilt
+# def butter_bandpass(lowcut, highcut, fs, order=5):
+#    nyq = 0.5 * fs
+#    low = lowcut / nyq
+#    high = highcut / nyq
+#    b, a = butter(order, [low, high], btype='band')
+#    return b, a
+# def butter_bandpass_filter(data, lowcut, highcut, fs, order=5):
+#    b, a = butter_bandpass(lowcut, highcut, fs, order=order)
+#    y = filtfilt(b, a, data)
+#    return y
+# fs = 1000
+# t = np.arange(0, 1, 1/fs)
+# f1 = 10
+# f2 = 50
+# sig = np.sin(2*np.pi*f1*t) + np.sin(2*np.pi*f2*t)
+# order = 4
+# filtered = butter_bandpass_filter(sig, f1, f2, fs, order)
+# print("The length of frequencies:",len(filtered))
+# print("The Butterworth bandpass filter output of first 50 frequencies:",filtered[:50])
+# fig, ax = plt.subplots()
+# ax.plot(t, sig, label='Original signal')
+# ax.plot(t, filtered, label='Filtered signal')
+# ax.set_xlabel('Time [s]')
+#
+#
+#
+#
+# def mark_pqrst(filtered_signal, pqrst_indices, num_waves=5):
+#     peak_labels = ['P', 'Q', 'R', 'S', 'T']
+#     labels = []
+#     for i in range(min(num_waves, len(pqrst_indices))):
+#         labels.append((pqrst_indices[i], peak_labels[i % len(peak_labels)]))
+#     return labels
+#
+#
+# def plot_signal_with_pqrst(filtered_signal, labels):
+#     plt.plot(filtered_signal.T[:10000])
+#     for idx, label in labels:
+#         plt.plot(idx, filtered_signal[0][idx], 'x', label=label)
+#         plt.text(idx, filtered_signal[0][idx], f' {label}', fontsize=12)
+#     plt.xlabel('Time in Seconds')
+#     plt.ylabel('Sample Index')
+#     plt.legend()
+#     plt.show()
