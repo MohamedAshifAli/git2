@@ -1,547 +1,147 @@
-import os
-
-import ReliefF
-import numpy as np
-import matplotlib.pyplot as plt
-# from fiftyone import Flatten
-from keras import Sequential
-from keras.layers import Conv1D, Dense, MaxPooling1D
-from scipy.signal import butter, filtfilt
+import glob
 import scipy.io
-from glob import glob
-
-from sklearn.preprocessing import StandardScaler
-
-# Function for Butterworth bandpass filter
-directory = glob("trainingnew\\training\\*.mat")
-# from scipy.signal import find_peaks
-
 import matplotlib.pyplot as plt
 from scipy.signal import butter, filtfilt
-import scipy.io
-from glob import glob
-
-# Function for Butterworth bandpass filter
+import neurokit2 as nk
 
 
-# Derivative filter
-def derivative_filter(data):
-    derivative_pass = np.diff(data, prepend=data[0])
-    return derivative_pass
 
-# Squaring function
-def squaring(data):
-    square_pass = data ** 2
-    return square_pass
 
-# Moving average filter
-def moving_window_integration(data, sample_rate, window_size=None):
-    if window_size is None:
-        assert sample_rate is not None, "if window size is None, sampling rate should be given"
-        window_size = int(0.08 * int(sample_rate))
-    integrated_signal = np.zeros(len(data))
-    cumulative_sum = np.cumsum(data)
-    integrated_signal[window_size:] = (cumulative_sum[window_size:] - cumulative_sum[:-window_size]) / window_size
-    integrated_signal[:window_size] = cumulative_sum[:window_size] / np.arange(1, window_size + 1)
-    return integrated_signal
-from scipy.signal import butter, filtfilt
+class Read_Dataset(object):
+    def __init__(self, db):
+        self.db = db
+        self.fs = 1000
+        self.show = True
 
-# Define Butterworth bandpass filter
-def butter_bandpass(lowcut, highcut, fs, order=5):
-    nyq = 0.5 * fs
-    low = lowcut / nyq
-    high = highcut / nyq
-    b, a = butter(order, [low, high], btype='band')
-    return b, a
+    def read_path(self):
+        if self.db == 1:
+            files = glob.glob("training\\training\\*.mat")
+        return files
 
-def butter_bandpass_filter(data, lowcut, highcut, fs, order=5):
-    b, a = butter_bandpass(lowcut, highcut, fs, order=order)
-    y = filtfilt(b, a, data)
-    return y
+    def read_signal(self, show = False):
+        sig = scipy.io.loadmat(self.file)
+        data = sig['val']
+        if show:
+            plt(data)
+            plt.show()
+        return data
 
-def differentiate(signal):
-    return np.diff(signal)
 
-def find_pqrst_waves(directory):
-    fs = 1000
+    def butter_bandpass(self, lowcut=0.5, highcut=300, order=5):
+        nyq = 0.5 * self.fs
+        low = lowcut / nyq
+        high = highcut / nyq
+        b, a = butter(order, [low, high], btype='band')
+        return b, a
 
-def calculate_threshold(signal, threshold_factor=0.5):
-        x = np.mean(signal) * threshold_factor
-        return x
+    def butter_bandpass_filter(self, data):
+        b, a = self.butter_bandpass()
+        y = filtfilt(b, a, data)
+        if self.show:
+            plt.plot(y)
+            plt.show()
+        return y
 
-# def find_peaks(diff_signal, threshold):
-#     peaks, _ = scipy.signal.find_peaks(diff_signal[0], height=threshold)
-#     return peaks
 
-def find_peaks(diff_signal, threshold):
-    all_peaks = []
-    for i in range(diff_signal.shape[0]):
-        peaks, _ = scipy.signal.find_peaks(diff_signal[i], height=threshold)
-        all_peaks.append(peaks)
-    return all_peaks
+    def mark_pqrst1(self):
+        for ind in range(self.ecg.shape[0]):
+            self.ecg_signal = self.ecg[ind, :]
+            _, rpeaks = nk.ecg_peaks(self.ecg_signal, sampling_rate=1000)
+            _, waves_peak = nk.ecg_delineate(self.ecg_signal, rpeaks, sampling_rate=1000, method="peak")
+            if self.show:
+                plot = nk.events_plot(rpeaks['ECG_R_Peaks'], self.ecg_signal)
+                plot = nk.events_plot([waves_peak['ECG_T_Peaks'][:3],
+                                       waves_peak['ECG_P_Peaks'][:3],
+                                       waves_peak['ECG_Q_Peaks'][:3],
+                                       waves_peak['ECG_S_Peaks'][:3]], self.ecg_signal[:4000])
 
-def mark_pqrst(filtered_signal, peaks):
-    p_waves = []
-    q_waves = []
-    r_waves = []
-    s_waves = []
-    t_waves = []
+    def mark_pqrst(filtered_signal, peaks):
+        p_waves = []
+        q_waves = []
+        r_waves = []
+        s_waves = []
+        t_waves = []
 
-    for row, peak_list in enumerate(peaks):
-        row_p_waves = []
-        row_q_waves = []
-        row_r_waves = []
-        row_s_waves = []
-        row_t_waves = []
+        for row, peak_list in enumerate(peaks):
+            row_p_waves = []
+            row_q_waves = []
+            row_r_waves = []
+            row_s_waves = []
+            row_t_waves = []
 
-        if len(peak_list) == 0:
-            # Append empty lists if no peaks are detected in this row
+            if len(peak_list) == 0:
+                # Append empty lists if no peaks are detected in this row
+                p_waves.append(row_p_waves)
+                q_waves.append(row_q_waves)
+                r_waves.append(row_r_waves)
+                s_waves.append(row_s_waves)
+                t_waves.append(row_t_waves)
+                continue  # Move to the next row
+
+            r_wave = peak_list[0]  # Initialize with the first peak
+
+            for i in range(1, len(peak_list)):
+                if filtered_signal[row][peak_list[i]] > filtered_signal[row][r_wave]:
+                    r_wave = peak_list[i]
+
+            row_r_waves.append(r_wave)
+
+            q_candidates = [p for p in peak_list if p < r_wave and filtered_signal[row][p] < 0]
+            if q_candidates:
+                row_q_waves.append(q_candidates[-1])
+
+            s_candidates = [p for p in peak_list if p > r_wave and filtered_signal[row][p] < 0]
+            if s_candidates:
+                row_s_waves.append(s_candidates[0])
+
+            if row_q_waves:
+                p_candidates = [p for p in peak_list if p < row_q_waves[-1]]
+                if p_candidates:
+                    row_p_waves.append(p_candidates[-1])
+
+            if row_s_waves:
+                t_candidates = [p for p in peak_list if p > row_s_waves[-1]]
+                if t_candidates:
+                    row_t_waves.append(t_candidates[0])
+
+            # Append detected waves for this row
             p_waves.append(row_p_waves)
             q_waves.append(row_q_waves)
             r_waves.append(row_r_waves)
             s_waves.append(row_s_waves)
             t_waves.append(row_t_waves)
-            continue  # Move to the next row
 
-        r_wave = peak_list[0]  # Initialize with the first peak
+        return p_waves, q_waves, r_waves, s_waves, t_waves
 
-        for i in range(1, len(peak_list)):
-            if filtered_signal[row][peak_list[i]] > filtered_signal[row][r_wave]:
-                r_wave = peak_list[i]
+    def PQRST_Extraction(self):
+        threshold = np.mean(diff_signal) * 0.5
 
-        row_r_waves.append(r_wave)
+        # Find peaks
+        peaks = find_peaks(diff_signal, threshold)
 
-        q_candidates = [p for p in peak_list if p < r_wave and filtered_signal[row][p] < 0]
-        if q_candidates:
-            row_q_waves.append(q_candidates[-1])
+        # Mark PQRST waves
+        p_waves, q_waves, r_waves, s_waves, t_waves = mark_pqrst(filtered_signal, peaks)
 
-        s_candidates = [p for p in peak_list if p > r_wave and filtered_signal[row][p] < 0]
-        if s_candidates:
-            row_s_waves.append(s_candidates[0])
 
-        if row_q_waves:
-            p_candidates = [p for p in peak_list if p < row_q_waves[-1]]
-            if p_candidates:
-                row_p_waves.append(p_candidates[-1])
+    def get_data(self):
+        data  = self.read_path()
+        for self.file in data:
+            self.ecg = self.butter_bandpass_filter(self.read_signal())
 
-        if row_s_waves:
-            t_candidates = [p for p in peak_list if p > row_s_waves[-1]]
-            if t_candidates:
-                row_t_waves.append(t_candidates[0])
+            self.mark_pqrst1()
 
-        # Append detected waves for this row
-        p_waves.append(row_p_waves)
-        q_waves.append(row_q_waves)
-        r_waves.append(row_r_waves)
-        s_waves.append(row_s_waves)
-        t_waves.append(row_t_waves)
 
-    return p_waves, q_waves, r_waves, s_waves, t_waves
+    def __call__(self, *args, **kwargs):
+        self.get_data()
 
-def detect_conditions_ppg(signal, fs):
-    conditions = []
 
-    # Check for Asystole: No QRS for at least 4 seconds
-    qrs_intervals = find_qrs_intervals(signal, fs)
-    if len(qrs_intervals) == 0 or np.min(qrs_intervals) > 4 * fs:
-        conditions.append(("Asystole", 0))
+file = (Read_Dataset(1))()
 
-    # Calculate heart rate from PPG signal
-    heart_rate = calculate_heart_rate(signal, fs)
 
-    # Check for Extreme Bradycardia: Heart rate lower than 40 bpm for 5 consecutive beats
-    if np.any(heart_rate < 40):
-        conditions.append(("Extreme Bradycardia", 1))
+class  Feature_Extration():
+    def __init__(self, db):
+        self.db = db
 
-    # Check for Extreme Tachycardia: Heart rate higher than 140 bpm for 17 consecutive beats
-    if np.any(heart_rate > 140):
-        conditions.append(("Extreme Tachycardia", 2))
-
-    # Add more conditions based on waveform morphology, if applicable
-
-    return conditions
-
-
-
-
-##Featre extraction
-# def HRV_Features(nn_intervals: List[float], pnni_as_percent: bool = True):
-#     """
-#     Notes
-#     -----
-#     Here are some details about feature engineering...
-#     - **mean_nni**: The mean of RR-intervals.
-#     - **sdnn** : The standard deviation of the time interval between successive normal heart beats \
-#     (i.e. the RR-intervals).
-#     - **sdsd**: The standard deviation of differences between adjacent RR-intervals
-#     - **rmssd**: The square root of the mean of the sum of the squares of differences between \
-#     adjacent NN-intervals. Reflects high frequency (fast or parasympathetic) influences on hrV \
-#     (*i.e.*, those influencing larger changes from one beat to the next).
-#     - **median_nni**: Median Absolute values of the successive differences between the RR-intervals.
-#     - **nni_50**: Number of interval differences of successive RR-intervals greater than 50 ms.
-#     - **pnni_50**: The proportion derived by dividing nni_50 (The number of interval differences \
-#     of successive RR-intervals greater than 50 ms) by the total number of RR-intervals.
-#     - **nni_20**: Number of interval differences of successive RR-intervals greater than 20 ms.
-#     - **pnni_20**: The proportion derived by dividing nni_20 (The number of interval differences \
-#     of successive RR-intervals greater than 20 ms) by the total number of RR-intervals.
-#     - **range_nni**: difference between the maximum and minimum nn_interval.
-#     - **cvsd**: Coefficient of variation of successive differences equal to the rmssd divided by \
-#     mean_nni.
-#     - **cvnni**: Coefficient of variation equal to the ratio of sdnn divided by mean_nni.
-#     - **mean_hr**: The mean Heart Rate.
-#     - **max_hr**: Max heart rate.
-#     - **min_hr**: Min heart rate.
-#     - **std_hr**: Standard deviation of heart rate.
-#     """
-#
-#     diff_nni = np.diff(nn_intervals)
-#     length_int = len(nn_intervals) - 1 if pnni_as_percent else len(nn_intervals)
-#     # Basic statistics
-#     mean_nni = np.mean(nn_intervals)
-#     median_nni = np.median(nn_intervals)
-#     range_nni = max(nn_intervals) - min(nn_intervals)
-#
-#     sdsd = np.std(diff_nni)
-#     rmssd = np.sqrt(np.mean(diff_nni ** 2))
-#
-#     nni_50 = sum(np.abs(diff_nni) > 50)
-#     pnni_50 = 100 * nni_50 / length_int
-#     nni_20 = sum(np.abs(diff_nni) > 20)
-#     pnni_20 = 100 * nni_20 / length_int
-#
-#     # Feature found on github and not in documentation
-#     cvsd = rmssd / mean_nni
-#     # Features only for long term recordings
-#     sdnn = np.std(nn_intervals, ddof=1)  # ddof = 1 : unbiased estimator => divide std by n-1
-#     cvnni = sdnn / mean_nni
-#     # Heart Rate equivalent features
-#     heart_rate_list = np.divide(60000, nn_intervals)
-#
-#     min_hr = min(heart_rate_list)
-#     std_hr = np.std(heart_rate_list)
-#
-#     time_domain_features = {
-#         'mean_nni': mean_nni,
-#         'sdnn': sdnn,
-#         'sdsd': sdsd,
-#         'nni_50': nni_50,
-#         'pnni_50': pnni_50,
-#         'nni_20': nni_20,
-#         'pnni_20': pnni_20,
-#         'rmssd': rmssd,
-#         'median_nni': median_nni,
-#         'range_nni': range_nni,
-#         'cvsd': cvsd,
-#         'cvnni': cvnni,
-#         "min_hr": min_hr,
-#         "std_hr": std_hr,
-#     }
-#
-#     f1_new = []
-#     for value in time_domain_features.values():
-#         array = np.array(value)
-#         f1_new.append(array)
-#     return f1_new
-def PPG_Signals():
-    count = 0
-    all_features = []
-    all_labels = []
-    fs = 1000  # Sample rate (Hz)
-    # High cut-off frequency (Hz)
-    order = 4
-    directory = glob("training/training/*.mat")
-    for filename in range(len(directory)):
-        # Load the .mat file
-        threshold = 0.5  # Adjust the threshold as needed
-        window_size = 100
-        mat_data = scipy.io.loadmat(directory[filename])
-        s = mat_data['val']
-        lowcut = np.random.uniform(0.1, 1)  # Random lower cutoff frequency between 0.1 and 1 Hz
-        highcut = np.random.uniform(2, 10)
-        filtered_signal1 = butter_bandpass_filter(s, 0.5, 300.0, fs, order)
-        for i in range(0, filtered_signal1.shape[1], 50):
-            # Take the next 50 samples for each iteration
-            filtered_signal = filtered_signal1[:, i:i + 50]
-            # filtered_signal = filtered_signal1[:, :50]
-            # filtered_signal2 = filtered_signal.flatten()
-            diff_signal = differentiate(filtered_signal)
-
-            # Calculate threshold
-            threshold = np.mean(diff_signal) * 0.5
-
-            # Find peaks
-            peaks = find_peaks(diff_signal, threshold)
-
-            # Mark PQRST waves
-            p_waves, q_waves, r_waves, s_waves, t_waves = mark_pqrst(filtered_signal, peaks)
-            # Plot the filtered signal with PQRST labels
-            # plot_signal_with_pqrst(filtered_signal2, p_waves, q_waves, r_waves, s_waves, t_waves)
-
-            # label = 0
-            # if len(r_waves) == 0:
-            #     label = 0  # Asystole
-            # elif len(r_waves) > 4:
-            #     label = 1  # Extreme Tachycardia
-            # elif len(r_waves) <= 4 and len(r_waves) > 1:
-            #     if r_waves[1] - r_waves[0] > 5:
-            #         label = 2  # Extreme Bradycardia
-            #     elif r_waves[1] - r_waves[0] < 5:
-            #         label = 3  # Ventricular Tachycardia
-            # elif len(r_waves) > 0 and len(p_waves) == 0 and len(q_waves) == 0 and len(s_waves) == 0 and len(t_waves) == 0:
-            #     label = 4  # Ventricular Flutter/Fibrillation
-            #
-            # all_labels.append(label)
-
-
-
-
-            plt.figure(figsize=(12, 6))
-
-            for row in range(filtered_signal.shape[0]):
-                if row == 0:
-                    plt.plot(filtered_signal[row], label='Filtered Signal')
-                else:
-                    plt.plot(filtered_signal[row])
-
-                if p_waves[row]:
-                    plt.plot(p_waves[row], filtered_signal[row][p_waves[row]], 'go',
-                             label='P Waves' if row == 0 else "")
-                if q_waves[row]:
-                    plt.plot(q_waves[row], filtered_signal[row][q_waves[row]], 'bo',
-                             label='Q Waves' if row == 0 else "")
-                if r_waves[row]:
-                    plt.plot(r_waves[row], filtered_signal[row][r_waves[row]], 'ro',
-                             label='R Waves' if row == 0 else "")
-                if s_waves[row]:
-                    plt.plot(s_waves[row], filtered_signal[row][s_waves[row]], 'mo',
-                             label='S Waves' if row == 0 else "")
-                if t_waves[row]:
-                    plt.plot(t_waves[row], filtered_signal[row][t_waves[row]], 'co',
-                             label='T Waves' if row == 0 else "")
-
-            plt.xlabel('Time (in Seconds')
-            plt.ylabel('Samples')
-            plt.legend()
-            output_dir = "PQRST Segmented"
-            if not os.path.exists(output_dir):
-                os.makedirs(output_dir)
-
-            # Save the plot to the directory
-            plt.savefig(os.path.join(output_dir, f"_{filename}PQRST_Waves_Segmented.png"))
-            # plt.show()
-            # plt.close()
-
-    return
-
-PPG_Signals()
-# Iterate over all files in the directory
-def PPG_Signalss():
-    count = 0
-    all_features = []
-    all_labels = []
-    fs = 1000  # Sample rate (Hz)
-    # High cut-off frequency (Hz)
-    order = 4
-    directory = glob("training/training/*.mat")
-    for filename in range(len(directory)):
-        # Load the .mat file
-        threshold = 0.5  # Adjust the threshold as needed
-        window_size = 100
-        mat_data = scipy.io.loadmat(directory[filename])
-        s = mat_data['val']
-        lowcut = np.random.uniform(0.1, 1)  # Random lower cutoff frequency between 0.1 and 1 Hz
-        highcut = np.random.uniform(2, 10)
-
-
-        batch_size = 50
-
-
-        for i in range(0, 1000, batch_size):
-            # Take the next 50 samples for each iteration
-            filtered_signal = s[:, i:i + 50]
-            filtered = butter_bandpass_filter(filtered_signal, 0.5, 300.0, fs, order)
-
-            # filtered_signal = filtered_signal1[:, :50]
-            filtered_signal2 = filtered.flatten()
-            diff_signal = differentiate(filtered_signal2)
-
-            # Calculate threshold
-            threshold = np.mean(diff_signal) * 0.5
-
-            # Find peaks
-            peaks = find_peaks(diff_signal, threshold)
-
-            # Mark PQRST waves
-            p_waves, q_waves, r_waves, s_waves, t_waves = mark_pqrst(filtered_signal, peaks)
-
-            # Plot the filtered signal with PQRST labels
-            # plot_signal_with_pqrst(filtered_signal2, p_waves, q_waves, r_waves, s_waves, t_waves)
-
-            # label = 0
-            # if len(r_waves) == 0:
-            #     label = 0  # Asystole
-            # elif len(r_waves) > 4:
-            #     label = 1  # Extreme Tachycardia
-            # elif len(r_waves) <= 4 and len(r_waves) > 1:
-            #     if r_waves[1] - r_waves[0] > 5:
-            #         label = 2  # Extreme Bradycardia
-            #     elif r_waves[1] - r_waves[0] < 5:
-            #         label = 3  # Ventricular Tachycardia
-            # elif len(r_waves) > 0 and len(p_waves) == 0 and len(q_waves) == 0 and len(s_waves) == 0 and len(t_waves) == 0:
-            #     label = 4  # Ventricular Flutter/Fibrillation
-            #
-            # all_labels.append(label)
-            #
-
-
-
-            plt.figure(figsize=(12, 6))
-
-            for row in range(filtered_signal.shape[0]):
-                if row == 0:
-                    plt.plot(filtered_signal[row], label='Filtered Signal')
-                else:
-                    plt.plot(filtered_signal[row])
-
-                if p_waves[row]:
-                    plt.plot(p_waves[row], filtered_signal[row][p_waves[row]], 'go',
-                             label='P Waves' if row == 0 else "")
-                if q_waves[row]:
-                    plt.plot(q_waves[row], filtered_signal[row][q_waves[row]], 'bo',
-                             label='Q Waves' if row == 0 else "")
-                if r_waves[row]:
-                    plt.plot(r_waves[row], filtered_signal[row][r_waves[row]], 'ro',
-                             label='R Waves' if row == 0 else "")
-                if s_waves[row]:
-                    plt.plot(s_waves[row], filtered_signal[row][s_waves[row]], 'mo',
-                             label='S Waves' if row == 0 else "")
-                if t_waves[row]:
-                    plt.plot(t_waves[row], filtered_signal[row][t_waves[row]], 'co',
-                             label='T Waves' if row == 0 else "")
-
-            plt.xlabel('Time (in Seconds')
-            plt.ylabel('Samples')
-            plt.legend()
-            output_dir = "PQRST Segmented"
-            if not os.path.exists(output_dir):
-                os.makedirs(output_dir)
-
-            # Save the plot to the directory
-            plt.savefig(os.path.join(output_dir, f"_{filename}PQRST_Waves_Segmented.png"))
-            # plt.show()
-            # plt.close()
-
-    return
-
-# PPG_Signals()
-
-#####COMPARITIVE MODEL
-
-def OneDimensional_CNN(xtrain,ytrain,xtest,ytest):
-
-    xtrain = xtrain.reshape(xtrain.shape[0], 6, 45).astype('float32')
-    xtest = xtest.reshape(xtest.shape[0], 6, 45).astype('float32')
-
-    model = Sequential()
-    model.add(Conv1D(filters=32, kernel_size=5, input_shape=(6, 45)))
-    model.add(MaxPooling1D(pool_size=5 ))
-    model.add(Flatten())
-    model.add(Dense(100, activation='relu'))
-    model.add(Dense(ytrain.shape[1], activation='softmax'))
-    model.compile(optimizer='adam', loss='mse', metrics=['accuracy'])
-    model.fit(xtrain,ytrain,epochs=10,verbose=1)
-    ypred = model.predict(xtest)
-    return ypred,ytest
-
-
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Conv1D, MaxPooling1D, Flatten, Dense
-
-
-def CNN(xtrain,ytrain,xtest,ytest):
-    model = Sequential()
-    model.add(Conv1D(filters=32, kernel_size=3, activation='relu', input_shape=input_shape))
-    model.add(MaxPooling1D(pool_size=2))
-    model.add(Flatten())
-    model.add(Dense(128, activation='relu'))
-    model.add(Dense(ytrain.shape[1], activation='softmax'))
-    model.compile(optimizer='adam', loss='mse', metrics=['accuracy'])
-    model.fit(xtrain, ytrain, epochs=10, verbose=1)
-    ypred = model.predict(xtest)
-    return ypred, ytest
-
-from sklearn.ensemble import VotingClassifier
-from sklearn.metrics import accuracy_score, confusion_matrix
-from sklearn.neighbors import KNeighborsClassifier
-from sklearn.ensemble import RandomForestClassifier
-from xgboost import XGBClassifier
-
-
-def ensemble_model(X_train, X_test, y_train, y_test):
-    # Initialize classifiers
-    knn = KNeighborsClassifier(n_neighbors=11)
-    rf = RandomForestClassifier(n_estimators=100)
-    xgb = XGBClassifier(max_depth=3, eta=0.8, subsample=1, objective='binary:logistic')
-
-    # Fit classifiers
-    knn.fit(X_train, y_train)
-    rf.fit(X_train, y_train)
-    xgb.fit(X_train, y_train)
-
-    # Make predictions
-    y_pred_knn = knn.predict(X_test)
-    y_pred_rf = rf.predict(X_test)
-    y_pred_xgb = xgb.predict(X_test)
-
-    # Ensemble model
-    ensemble = VotingClassifier(estimators=[
-        ('KNN', knn),
-        ('Random Forest', rf),
-        ('XGBoost', xgb)
-    ], voting='hard')
-
-    # Fit ensemble model
-    ensemble.fit(X_train, y_train)
-
-    # Make predictions with ensemble
-    ypred = ensemble.predict(X_test)
-    return ypred
-
-from sklearn.ensemble import RandomForestClassifier
-
-def Fourth_comparitive(xtrain,ytrain,xtest,ytest):
-    # Initialize and train Random Forest classifier
-    clf = RandomForestClassifier(n_estimators=100, random_state=42)
-    clf.fit(xtrain, ytrain)
-
-    # Make predictions
-    ypred = clf.predict(xtrain)
-
-    return ypred
-
-from sklearn.preprocessing import StandardScaler
-from skrebate import ReliefF
-
-def Relief_Algorithm(Feat, Labels):
-
-    # Feature scaling
-    scaler = StandardScaler()
-    Feat_scaled = scaler.fit_transform(Feat)
-
-    # Initialize and fit the RELIEFF algorithm
-    relieff = ReliefF(n_features_to_select=10, n_neighbors=10)
-    relieff.fit(Feat_scaled, Labels)
-
-    # Select top features
-    selected_features = relieff.top_features_
-
-    return selected_features
-
-
-
-# Example usage:
-# selected_features = Relief_Algorithm(Feat, Labels)
-# print("Selected Features:", selected_features)
-
-
+    def Temporal_Features(self):
+        pass
 
